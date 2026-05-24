@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = "claude-opus-4-7"
+MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 8192
 
 CATEGORIES = ["ambiguous_input", "edge_case", "adversarial_injection", "format_breaking"]
@@ -35,8 +35,10 @@ allergic to generic filler.
 </role>
 
 <task>
-The user message is the prompt under evaluation (the "target prompt"). Produce three things \
-by calling the submit_eval tool:
+The user message contains the prompt under evaluation (the "target prompt"), and may \
+optionally include an <intended_use_case> block describing how that prompt will be used. \
+Evaluate only the target prompt; use any <intended_use_case> solely to make your tests \
+more realistic and domain-appropriate. Produce three things by calling the submit_eval tool:
 
 1. test_prompts — exactly 10 concrete test inputs you would actually run against the target \
    prompt to stress it. Each test is a complete, ready-to-send input (for a template/system \
@@ -219,8 +221,12 @@ EVAL_TOOL = {
 }
 
 
-def generate_eval(user_prompt: str) -> dict:
+def generate_eval(user_prompt: str, use_case: str | None = None) -> dict:
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    content = user_prompt
+    if use_case and use_case.strip():
+        content = f"{user_prompt}\n\n<intended_use_case>\n{use_case.strip()}\n</intended_use_case>"
 
     response = client.messages.create(
         model=MODEL,
@@ -228,7 +234,7 @@ def generate_eval(user_prompt: str) -> dict:
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
         tools=[EVAL_TOOL],
         tool_choice={"type": "tool", "name": "submit_eval"},
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=[{"role": "user", "content": content}],
     )
 
     for block in response.content:
